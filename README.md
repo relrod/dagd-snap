@@ -16,3 +16,7 @@ cabal sandbox init
 cabal install -fdevelopment
 ./.cabal-sandbox/bin/dagd
 ```
+
+## Differences from the original
+
+- Endpoints that only ever return text now return `text/plain` always.
