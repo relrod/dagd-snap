@@ -9,18 +9,18 @@ module Application where
 import Control.Lens
 import Snap.Snaplet
 import Snap.Snaplet.Heist
-import Snap.Snaplet.Auth
-import Snap.Snaplet.Session
+import Snap.Snaplet.MysqlSimple
 
 ------------------------------------------------------------------------------
 data App = App
-    { _heist :: Snaplet (Heist App)
-    }
+  { _heist :: Snaplet (Heist App)
+  , _db :: Snaplet Mysql
+  }
 
 makeLenses ''App
 
 instance HasHeist App where
-    heistLens = subSnaplet heist
+  heistLens = subSnaplet heist
 
 
 ------------------------------------------------------------------------------
