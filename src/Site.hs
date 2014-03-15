@@ -25,15 +25,6 @@ import           Network.Whois
 ------------------------------------------------------------------------------
 import           Application
 
-{-
-handleLoginSubmit :: Handler App (AuthManager App) ()
-handleLoginSubmit =
-    loginUser "login" "password" Nothing
-              (\_ -> handleLogin err) (redirect "/")
-  where
-    err = Just "Unknown user or password"
--}
-
 ------------------------------------------------------------------------------
 -- | Decide if we should add a newline or not to the response.
 decideStrip :: AppHandler ()
