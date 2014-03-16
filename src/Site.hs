@@ -13,12 +13,14 @@ import qualified Data.CaseInsensitive as CI
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
+import           Graphics.ImageMagick.MagickWand
 import qualified Network.HTTP.Conduit as NHC
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           Snap.Snaplet.MysqlSimple
 import           Snap.Util.FileServe
+import qualified Text.Regex.PCRE.Light as PCRE
 import           Heist
 import qualified Heist.Interpreted as I
 import           Control.Monad.IO.Class
@@ -93,6 +95,36 @@ siteHeadersHandler = do
      then x
      else C8.append "http://" x
 
+imageHandler :: AppHandler ()
+imageHandler = do
+  bgColor <- getParam "bgcolor"
+  text    <- getParam "text"
+  r       <- getRequest
+  let path = rqPathInfo r
+  let regex = PCRE.compile "^(\\d+)[x*](\\d+)(?:\\.|/|)(\\w+)?/?$" [PCRE.caseless]
+  case PCRE.match regex path [] of
+    Just (_:width:height:t) -> do
+      let m = fromMaybe (width `mappend` "x" `mappend` height) text
+          extension = if null t then "png" else head t
+      img <- liftIO $ withMagickWandGenesis $ do
+        (_,w)  <- magickWand
+        (_,dw) <- drawingWand
+        c      <- pixelWand
+        c `setColor` C8.append (C8.pack "#") (fromMaybe "2a4a77" bgColor)
+        newImage w (read $ C8.unpack width) (read $ C8.unpack height) c
+        c `setColor` "white"
+        dw `setFillColor` c
+        dw `setTextAntialias` True
+        dw `setStrokeOpacity` 0
+        drawAnnotation dw 20 30 (T.pack $ C8.unpack m)
+        drawImage w dw
+        w `setImageFormat` T.pack (C8.unpack extension)
+        getImageBlob w
+      mime <- liftIO $ withMagickWandGenesis $ toMime (T.pack $ C8.unpack extension)
+      modifyResponse $ setContentType (C8.pack $ T.unpack mime)
+      writeBS img
+    _       -> modifyResponse $ setResponseStatus 404 "Not Found"
+
 ipHandler :: AppHandler ()
 ipHandler = do
   r <- getRequest
@@ -122,6 +154,7 @@ whoisHandler = do
 routes :: [(ByteString, Handler App App ())]
 routes = [ ("",               serveDirectory "static")
          , ("/headers",       siteHeadersHandler)
+         , ("/image",         imageHandler)
          , ("/ip",            ipHandler)
          , ("/ua",            userAgentHandler)
          , ("/w/:query",      whoisHandler)
