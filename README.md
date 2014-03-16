@@ -20,7 +20,3 @@ cabal install -fdevelopment
 ## Differences from the original
 
 - Endpoints that only ever return text now return `text/plain` always.
-- We now expect that URLs are properly encoded. For example,
-  `/headers/http://www.google.com/` now becomes
-  `/headers/http%3A%2F%2Fgoogle.com%2F`. You can, however, use
-  `/headers/?site=http://google.com` without encoding.
