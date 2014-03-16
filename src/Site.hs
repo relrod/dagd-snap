@@ -13,6 +13,7 @@ import qualified Data.CaseInsensitive as CI
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
+import qualified Network.HTTP.Conduit as NHC
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
@@ -69,12 +70,28 @@ prepareContent = do
        Just "application/xhtml+xml" -> useHtml
        _                            -> useText
 
-headersHandler :: AppHandler ()
-headersHandler = do
+siteHeadersHandler :: AppHandler ()
+siteHeadersHandler = do
+  site <- fmap (fmap appendHttp) (getParam "site")
   r <- getRequest
-  let headers = listHeaders r
-      mapped  = map (\x -> (CI.original (fst x)) `mappend` ": " `mappend` snd x) headers
-    in (writeBS $ C8.unlines mapped) >> decideStrip
+  case site of
+    Just s  -> do
+      rsp <- liftIO $ do
+        u <- NHC.parseUrl (C8.unpack s)
+        NHC.withManager $ NHC.httpLbs u
+      writeText . T.pack . unlines $
+        fmap (\(a, b) ->
+          C8.unpack $ CI.original a `mappend` ": " `mappend` b) (NHC.responseHeaders rsp)
+    Nothing -> do
+      let headers = listHeaders r
+          mapped  = map (\x -> (CI.original (fst x)) `mappend` ": " `mappend` snd x) headers
+        in (writeBS $ C8.unlines mapped)
+  decideStrip
+ where
+   appendHttp x =
+     if "http://" `C8.isPrefixOf` x || "https://" `C8.isPrefixOf` x
+     then x
+     else C8.append "http://" x
 
 ipHandler :: AppHandler ()
 ipHandler = do
@@ -103,11 +120,12 @@ whoisHandler = do
 ------------------------------------------------------------------------------
 -- | The application's routes.
 routes :: [(ByteString, Handler App App ())]
-routes = [ ("",           serveDirectory "static")
-         , ("/headers",   headersHandler)
-         , ("/ip",        ipHandler)
-         , ("/ua",        userAgentHandler)
-         , ("/w/:query",  whoisHandler)
+routes = [ ("",               serveDirectory "static")
+         , ("/headers/",      siteHeadersHandler)
+         , ("/headers/:site", siteHeadersHandler)
+         , ("/ip",            ipHandler)
+         , ("/ua",            userAgentHandler)
+         , ("/w/:query",      whoisHandler)
          ]
 
 
