@@ -72,20 +72,20 @@ prepareContent = do
 
 siteHeadersHandler :: AppHandler ()
 siteHeadersHandler = do
-  site <- fmap (fmap appendHttp) (getParam "site")
   r <- getRequest
+  let site = rqPathInfo r
   case site of
-    Just s  -> do
+    "" -> do
+      let headers = listHeaders r
+          mapped  = map (\x -> (CI.original (fst x)) `mappend` ": " `mappend` snd x) headers
+        in (writeBS $ C8.unlines mapped)
+    s  -> do
       rsp <- liftIO $ do
-        u <- NHC.parseUrl (C8.unpack s)
+        u <- NHC.parseUrl (C8.unpack $ appendHttp s)
         NHC.withManager $ NHC.httpLbs u
       writeText . T.pack . unlines $
         fmap (\(a, b) ->
           C8.unpack $ CI.original a `mappend` ": " `mappend` b) (NHC.responseHeaders rsp)
-    Nothing -> do
-      let headers = listHeaders r
-          mapped  = map (\x -> (CI.original (fst x)) `mappend` ": " `mappend` snd x) headers
-        in (writeBS $ C8.unlines mapped)
   decideStrip
  where
    appendHttp x =
@@ -121,8 +121,7 @@ whoisHandler = do
 -- | The application's routes.
 routes :: [(ByteString, Handler App App ())]
 routes = [ ("",               serveDirectory "static")
-         , ("/headers/",      siteHeadersHandler)
-         , ("/headers/:site", siteHeadersHandler)
+         , ("/headers",       siteHeadersHandler)
          , ("/ip",            ipHandler)
          , ("/ua",            userAgentHandler)
          , ("/w/:query",      whoisHandler)
