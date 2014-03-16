@@ -18,7 +18,7 @@ import qualified Network.HTTP.Conduit as NHC
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
-import           Snap.Snaplet.MysqlSimple
+import qualified Snap.Snaplet.PostgresqlSimple as PG
 import           Snap.Util.FileServe
 import qualified Text.Regex.PCRE.Light as PCRE
 import           Heist
@@ -27,6 +27,8 @@ import           Control.Monad.IO.Class
 import           Network.Whois
 ------------------------------------------------------------------------------
 import           Application
+import qualified ShortURL
+import           ShortURL (ShortURL ())
 
 ------------------------------------------------------------------------------
 -- | Decide if we should add a newline or not to the response.
@@ -149,6 +151,18 @@ whoisHandler = do
       writeText . T.pack . Prelude.unlines $ fmap (fromMaybe "") [fst w, snd w]
       decideStrip
 
+shortUrlRedirectHandler :: AppHandler ()
+shortUrlRedirectHandler = do
+  shorturl <- getParam "shorturl"
+  case shorturl of
+    Nothing ->
+      modifyResponse $ setResponseStatus 404 "Not Found"
+    Just s  -> do
+      result <- PG.query "select * from shorturls where shorturl=?" (PG.Only s)
+      case result :: [ShortURL] of
+        []    -> modifyResponse $ setResponseStatus 404 "Not Found"
+        [url] -> redirect (C8.pack $ T.unpack $ ShortURL.longurl url)
+
 ------------------------------------------------------------------------------
 -- | The application's routes.
 routes :: [(ByteString, Handler App App ())]
@@ -158,6 +172,7 @@ routes = [ ("",               serveDirectory "static")
          , ("/ip",            ipHandler)
          , ("/ua",            userAgentHandler)
          , ("/w/:query",      whoisHandler)
+         , ("/:shorturl",     shortUrlRedirectHandler)
          ]
 
 
@@ -166,7 +181,7 @@ routes = [ ("",               serveDirectory "static")
 app :: SnapletInit App App
 app = makeSnaplet "app" "An snaplet example application." Nothing $ do
     h <- nestSnaplet "" heist $ heistInit "templates"
-    d <- nestSnaplet "db" db mysqlInit
+    d <- nestSnaplet "db" db PG.pgsInit
     addRoutes routes
     return $ App h d
 

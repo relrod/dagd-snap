@@ -2,7 +2,7 @@
 
 This is a Haskell rewrite of the http://da.gd/ site (originally PHP).
 
-It is written in the Snap framework and uses snaplet-mysql-simple for DB
+It is written in the Snap framework and uses snaplet-postgresql-simple for DB
 access.
 
 It is licensed under the same Apache-2.0 license as the original site.
