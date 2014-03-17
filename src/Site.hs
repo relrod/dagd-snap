@@ -133,6 +133,18 @@ ipHandler = do
   writeBS $ rqRemoteAddr r
   decideStrip
 
+statusHandler :: AppHandler ()
+statusHandler = do
+  code    <- getParam "code"
+  message <- getParam "message"
+
+  case code of
+    Nothing ->
+      modifyResponse $ setResponseStatus 404 "Not Found"
+    Just c  ->
+      modifyResponse $
+        setResponseStatus (read $ C8.unpack c) (fromMaybe "da.gd header test" message)
+
 userAgentHandler :: AppHandler ()
 userAgentHandler = do
   r <- getRequest
@@ -170,13 +182,15 @@ shortUrlRedirectHandler = do
 ------------------------------------------------------------------------------
 -- | The application's routes.
 routes :: [(ByteString, Handler App App ())]
-routes = [ ("",               serveDirectory "static")
-         , ("/headers",       siteHeadersHandler)
-         , ("/image",         imageHandler)
-         , ("/ip",            ipHandler)
-         , ("/ua",            userAgentHandler)
-         , ("/w/:query",      whoisHandler)
-         , ("/:shorturl",     shortUrlRedirectHandler)
+routes = [ ("",                       serveDirectory "static")
+         , ("/headers",               siteHeadersHandler)
+         , ("/image",                 imageHandler)
+         , ("/ip",                    ipHandler)
+         , ("/status/:code",          statusHandler)
+         , ("/status/:code/:message", statusHandler)
+         , ("/ua",                    userAgentHandler)
+         , ("/w/:query",              whoisHandler)
+         , ("/:shorturl",             shortUrlRedirectHandler)
          ]
 
 
