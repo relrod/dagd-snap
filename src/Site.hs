@@ -11,6 +11,7 @@ import           Control.Monad
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.CaseInsensitive as CI
+import           Data.Char (chr)
 import           Data.List (dropWhileEnd, intercalate, nub)
 import           Data.Maybe
 import           Data.Monoid
@@ -24,6 +25,7 @@ import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import qualified Snap.Snaplet.PostgresqlSimple as PG
 import           Snap.Util.FileServe
+import qualified System.Random as Rand
 import qualified Text.Regex.PCRE.Light as PCRE
 import           Heist
 import qualified Heist.Interpreted as I
@@ -167,6 +169,41 @@ ipHandler = do
   writeBS $ rqRemoteAddr r
   decideStrip
 
+-- | Generate random-ish passwords.
+--
+-- If "xkcd" is given, we will render xkcd-style passwords using random words
+-- from /usr/share/dict/words. Otherwise, we will render a random string.
+--
+-- For xkcd-style, length controls the number of words. For random-style, length
+-- controls the length of the output string.
+passwordHandler :: AppHandler ()
+passwordHandler = do
+  xkcd <- getParam "xkcd"
+  length <- getParam "length"
+
+  let useXkcd =
+        case xkcd of
+          Just ""     -> True
+          Just "1"    -> True
+          Just "true" -> True
+          _           -> False
+      pwLength =
+        case length of
+          Nothing -> if useXkcd then 4 else 25
+          Just n  -> read (C8.unpack n) :: Int
+  if useXkcd
+    then do
+      words <- liftIO $ C8.lines <$> C8.readFile "/usr/share/dict/words"
+      password <- liftIO $ replicateM pwLength (pick words)
+      writeBS $ C8.unwords password
+    else do
+      s <- liftIO $ replicateM pwLength (pick possibleChars)
+      writeBS $ C8.pack s
+  decideStrip
+  where
+    possibleChars = map chr [33..126]
+    pick xs = liftM (xs !!) (Rand.randomRIO (0, length xs - 1))
+
 statusHandler :: AppHandler ()
 statusHandler = do
   code    <- getParam "code"
@@ -221,6 +258,7 @@ routes = [ ("",                       serveDirectory "static")
          , ("/host/:host",            hostHandler)
          , ("/image",                 imageHandler)
          , ("/ip",                    ipHandler)
+         , ("/password",              passwordHandler)
          , ("/status/:code",          statusHandler)
          , ("/status/:code/:message", statusHandler)
          , ("/ua",                    userAgentHandler)
