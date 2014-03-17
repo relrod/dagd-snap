@@ -20,3 +20,12 @@ cabal install -fdevelopment
 ## Differences from the original
 
 - Endpoints that only ever return text now return `text/plain` always.
+- Shorten now passes everything AFTER the shorturl along with the redirect,
+  including query strings. i.e., if `/e` redirects to `http://example.com`,
+  `/e/` will redirect to `http://example.com/`, `/e/foo/bar` will redirect to
+  `http://example.com/foo/bar`, and `/e?foo=1` will redirect to
+  `http://example.com?foo=1`.
+  - The differences here are:
+    - Adding `/` to the shorturl adds a `/` to the redirect.
+    - Querystrings get passed along now too, since we don't use them internally
+      for routing anymore.

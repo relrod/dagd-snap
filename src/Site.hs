@@ -161,7 +161,11 @@ shortUrlRedirectHandler = do
       result <- PG.query "select * from shorturls where shorturl=?" (PG.Only s)
       case result :: [ShortURL] of
         []    -> modifyResponse $ setResponseStatus 404 "Not Found"
-        [url] -> redirect (C8.pack $ T.unpack $ ShortURL.longurl url)
+        [url] -> do
+          r <- getRequest
+          let longUrl = C8.pack $ T.unpack (ShortURL.longurl url)
+              extra   = C8.drop (C8.length (rqContextPath r) - 1) (rqURI r)
+            in redirect (longUrl `mappend` extra)
 
 ------------------------------------------------------------------------------
 -- | The application's routes.
