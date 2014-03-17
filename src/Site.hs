@@ -6,15 +6,19 @@ module Site
 
 ------------------------------------------------------------------------------
 import           Control.Applicative
+import           Control.Exception (SomeException, try)
 import           Control.Monad
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.CaseInsensitive as CI
+import           Data.List (dropWhileEnd, intercalate, nub)
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
 import           Graphics.ImageMagick.MagickWand
 import qualified Network.HTTP.Conduit as NHC
+import           Network.URI (isAbsoluteURI, isIPv4address, isIPv6address)
+import qualified Network.Socket as S
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
@@ -96,6 +100,36 @@ siteHeadersHandler = do
      if "http://" `C8.isPrefixOf` x || "https://" `C8.isPrefixOf` x
      then x
      else C8.append "http://" x
+
+hostHandler :: AppHandler ()
+hostHandler = do
+  host <- getParam "host"
+  case host of
+    Nothing ->
+      modifyResponse $ setResponseStatus 404 "Not Found"
+    Just host' -> do
+      if isIpAddress (C8.unpack host')
+        then do
+          h <- liftIO $
+               fmap (S.addrAddress . head) $
+               S.getAddrInfo Nothing (C8.unpack <$> host) Nothing
+          name <- liftIO $
+                  fmap fst $ S.getNameInfo [] True False h
+          writeText $
+            T.pack (fromMaybe "Unable to determine reverse DNS." name)
+        else do
+          ips <- liftIO $
+                 try (fmap (fmap (init . dropWhileEnd (/= ':') . show . S.addrAddress)) $
+                 S.getAddrInfo Nothing (C8.unpack <$> host) Nothing)
+                 :: AppHandler (Either SomeException [String])
+          case ips of
+            Left e -> writeBS "Unable to get any IPs for the given hostname."
+            Right res -> writeText $ T.pack (intercalate ", " (nub res))
+      decideStrip
+ where
+   isIpAddress :: String -> Bool
+   isIpAddress = liftM2 (||) isIPv4address isIPv6address
+
 
 imageHandler :: AppHandler ()
 imageHandler = do
@@ -184,6 +218,7 @@ shortUrlRedirectHandler = do
 routes :: [(ByteString, Handler App App ())]
 routes = [ ("",                       serveDirectory "static")
          , ("/headers",               siteHeadersHandler)
+         , ("/host/:host",            hostHandler)
          , ("/image",                 imageHandler)
          , ("/ip",                    ipHandler)
          , ("/status/:code",          statusHandler)

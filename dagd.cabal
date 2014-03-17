@@ -30,6 +30,7 @@ Executable dagd
     imagemagick               >= 0.0.3.3 && < 1,
     MonadCatchIO-transformers >= 0.2.1   && < 0.4,
     mtl                       >= 2       && < 3,
+    network                   >= 2.4     && < 3,
     pcre-light                >= 0.4     && < 1,
     postgresql-simple         >= 0.4     && < 1,
     snap                      >= 0.13    && < 0.14,
