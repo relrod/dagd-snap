@@ -1,7 +1,7 @@
 <apply template="base">
   <b>da.gd</b>
   <br /><br />
-  <form method="POST" action="">
+  <form method="POST" action="/s">
     Long URL: <input type="text" name="url" id="url" size="35" autofocus />
     <br /><br />
     Optional custom suffix (truncated at 10 chars):

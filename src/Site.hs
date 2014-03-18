@@ -15,6 +15,7 @@ import           Data.Char (chr)
 import           Data.List (dropWhileEnd, intercalate, nub)
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Pool
 import qualified Data.Text as T
 import           Graphics.ImageMagick.MagickWand
 import qualified Network.HTTP.Conduit as NHC
@@ -250,6 +251,29 @@ shortUrlRedirectHandler = do
               extra   = C8.drop (C8.length (rqContextPath r) - 1) (rqURI r)
             in redirect (longUrl `mappend` extra)
 
+shortUrlAddHandler :: AppHandler ()
+shortUrlAddHandler = do
+  url      <- getParam "url"
+  shorturl <- getParam "shorturl"
+  dbState  <- PG.getPostgresState
+  let (dbPool) = PG.pgPool dbState
+  (db', a) <- liftIO $ takeResource dbPool
+  case url of
+    Just s -> do
+      newShorturl <- liftIO $ ShortURL.decideShortUrl db' s shorturl
+      case newShorturl of
+        Left e  -> do
+          modifyResponse $ setResponseStatus 400 "Bad Request"
+          writeBS e
+        Right s -> do
+          -- TODO: Actually store the short url
+          writeBS s
+    Nothing -> do
+      modifyResponse $ setResponseStatus 400 "Bad Request"
+      writeBS "No Long URL given."
+  liftIO $ destroyResource dbPool a db'
+
+
 ------------------------------------------------------------------------------
 -- | The application's routes.
 routes :: [(ByteString, Handler App App ())]
@@ -264,6 +288,7 @@ routes = [ ("",                       serveDirectory "static")
          , ("/ua",                    userAgentHandler)
          , ("/w/:query",              whoisHandler)
          , ("/:shorturl",             shortUrlRedirectHandler)
+         , ("/s",                     shortUrlAddHandler)
          ]
 
 
