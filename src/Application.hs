@@ -8,15 +8,14 @@ module Application where
 
 ------------------------------------------------------------------------------
 import Control.Lens
-import Control.Monad.State
 import Snap.Snaplet
 import Snap.Snaplet.Heist
-import Snap.Snaplet.PostgresqlSimple
+import Snap.Snaplet.Persistent
 
 ------------------------------------------------------------------------------
 data App = App
   { _heist :: Snaplet (Heist App)
-  , _db :: Snaplet Postgres
+  , _db :: Snaplet PersistState
   }
 
 makeLenses ''App
@@ -24,8 +23,8 @@ makeLenses ''App
 instance HasHeist App where
   heistLens = subSnaplet heist
 
-instance HasPostgres (Handler b App) where
-  getPostgresState = with db get
+instance HasPersistPool (Handler b App) where
+  getPersistPool = with db getPersistPool
 
 ------------------------------------------------------------------------------
 type AppHandler = Handler App App

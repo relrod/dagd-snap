@@ -17,6 +17,8 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Pool
 import qualified Data.Text as T
+import qualified Database.Persist as P
+import           Database.Persist.Sql
 import           Graphics.ImageMagick.MagickWand
 import qualified Network.HTTP.Conduit as NHC
 import           Network.URI (isAbsoluteURI, isIPv4address, isIPv6address)
@@ -24,7 +26,6 @@ import qualified Network.Socket as S
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
-import qualified Snap.Snaplet.PostgresqlSimple as PG
 import           Snap.Util.FileServe
 import qualified System.Random as Rand
 import qualified Text.Regex.PCRE.Light as PCRE

@@ -1,4 +1,10 @@
+{-# LANGUAGE EmptyDataDecls    #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module ShortURL
   ( ShortURL (..)
@@ -11,43 +17,27 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.List (isPrefixOf)
 import           Data.Monoid (mappend)
+import qualified Database.Persist as P
+import           Database.Persist.Sql
+import           Database.Persist.TH
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time.LocalTime
-import           Database.PostgreSQL.Simple
-import           Database.PostgreSQL.Simple.ToField
+
 import           Network.URI (isAbsoluteURI)
-import           Snap.Snaplet.PostgresqlSimple hiding (query)
+
 import           System.Random
 
-data ShortURL = ShortURL {
-  id         :: Maybe Integer
-, shorturl   :: String
-, longurl    :: Text
-, ownerIp    :: String
-, creationDt :: Maybe LocalTime
-, enabled    :: Maybe Bool -- TODO:  schema change to not null
-, custom     :: Maybe Bool -- TODO:  schema change to not null
-} deriving (Show, Eq)
-
-instance FromRow ShortURL where
-  fromRow =
-    ShortURL <$>
-    field <*>
-    field <*>
-    field <*>
-    field <*>
-    field <*>
-    field <*>
-    field
-
-instance ToRow ShortURL where
-  toRow u = [ toField (shorturl u)
-            , toField (longurl u)
-            , toField (ownerIp u)
-            , toField (enabled u)
-            , toField (custom u)
-            ]
+share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+ShortURL
+  shorturl Text
+  longurl Text
+  ownerIp Text
+  creationDt Text
+  enabled Bool Maybe
+  custom Bool Maybe
+  deriving Eq Ord Read Show
+|]
 
 possibleShortUrlChars :: [Char]
 possibleShortUrlChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['-', '_']
