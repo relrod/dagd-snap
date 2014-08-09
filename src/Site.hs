@@ -54,8 +54,8 @@ decideStrip = do
 -- 1/0/true/false, then use its value. If it is passed and it is not one of
 -- those values, or if it is not passed at all, then check the Accept header.
 -- Default to text/plain, if no Accept header is provided.
-prepareContent :: AppHandler ()
-prepareContent = do
+_prepareContent :: AppHandler ()
+_prepareContent = do
   text <- getParam "text"
   case text of
     Just ""      -> useText
@@ -85,8 +85,8 @@ siteHeadersHandler = do
   let site = rqPathInfo r
   case site of
     "" -> do
-      let headers = listHeaders r
-          mapped  = map (\x -> (CI.original (fst x)) `mappend` ": " `mappend` snd x) headers
+      let headers' = listHeaders r
+          mapped  = map (\x -> (CI.original (fst x)) <> ": " <> snd x) headers'
         in (writeBS $ C8.unlines mapped)
     s  -> do
       rsp <- liftIO $ do
@@ -94,7 +94,7 @@ siteHeadersHandler = do
         NHC.withManager $ NHC.httpLbs u
       writeText . T.pack . unlines $
         fmap (\(a, b) ->
-          C8.unpack $ CI.original a `mappend` ": " `mappend` b) (NHC.responseHeaders rsp)
+          C8.unpack $ CI.original a <> ": " <> b) (NHC.responseHeaders rsp)
   decideStrip
  where
    appendHttp x =
@@ -124,7 +124,7 @@ hostHandler = do
                  S.getAddrInfo Nothing (C8.unpack <$> host) Nothing)
                  :: AppHandler (Either SomeException [String])
           case ips of
-            Left e -> writeBS "Unable to get any IPs for the given hostname."
+            Left _    -> writeBS "Unable to get any IPs for the given hostname."
             Right res -> writeText $ T.pack (intercalate ", " (nub res))
       decideStrip
  where
@@ -137,9 +137,9 @@ imageHandler = do
   bgColor <- getParam "bgcolor"
   text    <- getParam "text"
   r       <- getRequest
-  let path = rqPathInfo r
+  let path' = rqPathInfo r
   let regex = PCRE.compile "^(\\d+)[x*](\\d+)(?:\\.|/|)(\\w+)?/?$" [PCRE.caseless]
-  case PCRE.match regex path [] of
+  case PCRE.match regex path' [] of
     Just (_:width:height:t) -> do
       let m = fromMaybe (width `mappend` "x" `mappend` height) text
           extension = if null t then "png" else head t
@@ -178,7 +178,7 @@ ipHandler = do
 passwordHandler :: AppHandler ()
 passwordHandler = do
   xkcd <- getParam "xkcd"
-  length <- getParam "length"
+  length' <- getParam "length"
 
   let useXkcd =
         case xkcd of
@@ -187,13 +187,13 @@ passwordHandler = do
           Just "true" -> True
           _           -> False
       pwLength =
-        case length of
+        case length' of
           Nothing -> if useXkcd then 4 else 25
           Just n  -> read (C8.unpack n) :: Int
   if useXkcd
     then do
-      words <- liftIO $ C8.lines <$> C8.readFile "/usr/share/dict/words"
-      password <- liftIO $ replicateM pwLength (pick words)
+      words' <- liftIO $ C8.lines <$> C8.readFile "/usr/share/dict/words"
+      password <- liftIO $ replicateM pwLength (pick words')
       writeBS $ C8.unwords password
     else do
       s <- liftIO $ replicateM pwLength (pick possibleChars)
@@ -223,8 +223,8 @@ userAgentHandler = do
 
 whoisHandler :: AppHandler ()
 whoisHandler = do
-  query <- getParam "query"
-  case query of
+  query' <- getParam "query"
+  case query' of
     Nothing ->
       modifyResponse $ setResponseStatus 404 "Not Found"
     Just q  -> do
@@ -247,7 +247,7 @@ shortUrlRedirectHandler = do
           r <- getRequest
           let longUrl = C8.pack $ T.unpack (shortURLLongurl . entityVal $ url)
               extra   = C8.drop (C8.length (rqContextPath r) - 1) (rqURI r)
-            in redirect (longUrl `mappend` extra)
+            in redirect (longUrl <> extra)
 
 shortUrlAddHandler :: AppHandler ()
 shortUrlAddHandler = do
@@ -260,9 +260,9 @@ shortUrlAddHandler = do
         Left e  -> do
           modifyResponse $ setResponseStatus 400 "Bad Request"
           writeText e
-        Right s -> do
+        Right s' -> do
           -- TODO: Actually store the short url
-          writeText s
+          writeText s'
     Nothing -> do
       modifyResponse $ setResponseStatus 400 "Bad Request"
       writeBS "No Long URL given."
