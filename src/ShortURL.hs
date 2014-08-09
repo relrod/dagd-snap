@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE EmptyDataDecls    #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE GADTs             #-}
@@ -7,25 +8,24 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 module ShortURL
-  ( ShortURL (..)
+  ( ShortURL
   , decideShortUrl
+  , isFreeShortUrl
   ) where
 
+import           Application
 import           Control.Applicative
 import           Control.Monad
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as C8
+import           Control.Monad.IO.Class
 import qualified Data.List (isPrefixOf)
-import           Data.Monoid (mappend)
-import qualified Database.Persist as P
+import           Data.Monoid ((<>))
 import           Database.Persist.Sql
 import           Database.Persist.TH
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Data.Time.LocalTime
-
+import           Data.Time (UTCTime)
 import           Network.URI (isAbsoluteURI)
-
+import           Snap.Snaplet.Persistent
 import           System.Random
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -33,55 +33,53 @@ ShortURL
   shorturl Text
   longurl Text
   ownerIp Text
-  creationDt Text
+  creationDt UTCTime
   enabled Bool Maybe
-  custom Bool Maybe
+  customShorturl Bool
+  ShorturlKey shorturl
   deriving Eq Ord Read Show
 |]
 
 possibleShortUrlChars :: [Char]
 possibleShortUrlChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['-', '_']
 
-isValidShortUrl :: ByteString -> Either ByteString ByteString
-isValidShortUrl x = if all (flip elem possibleShortUrlChars) (C8.unpack x)
+isValidShortUrl :: Text -> Either Text Text
+isValidShortUrl x = if all (flip elem possibleShortUrlChars) (T.unpack x)
                     then Right x
                     else Left $
                          "Invalid short URL given. Valid characters: "
-                         `mappend` C8.pack possibleShortUrlChars
+                         <> T.pack possibleShortUrlChars
 
-isValidLongURL :: ByteString -> Either ByteString ByteString
-isValidLongURL x = if liftM2 (&&) (Data.List.isPrefixOf "http") isAbsoluteURI (C8.unpack x)
+isValidLongURL :: Text -> Either Text Text
+isValidLongURL x = if liftM2 (&&) (Data.List.isPrefixOf "http") isAbsoluteURI (T.unpack x)
                    then Right x
                    else Left "Invalid long URL given."
 
-isFreeShortUrl :: Connection -> ByteString -> IO (Either ByteString ByteString)
-isFreeShortUrl d z = do
-  c <- query d "select count(*) from shorturls where shorturl=?" (Only z) :: IO [Only Int]
-  case c of
-    [Only c] -> if c == 0
-           then return (Right z)
-           else return (Left "That short URL was already taken. :'(")
-    _   -> return $ Left "Unable to check the uniqueness of this shorturl. :'("
+isFreeShortUrl :: Text -> AppHandler (Either Text Text)
+isFreeShortUrl z = do
+  c <- runPersist $ count $ [ShortURLShorturl ==. z]
+  return $ if c == 0
+           then Right z
+           else Left "That short URL was already taken. :'("
 
 -- Random short URLs --
 
-takePreviousPublicUrl :: Connection -> ByteString -> IO (Maybe ByteString)
-takePreviousPublicUrl d z = do
-  q <- query d "select shorturl from shorturls where longurl=? and custom_shorturl=false" (Only (C8.unpack z)) :: IO [Only String]
-  return $ case q of
-    [Only shorturl] -> Just (C8.pack shorturl)
-    _               -> Nothing
+takePreviousPublicUrl :: Text -> AppHandler (Maybe Text)
+takePreviousPublicUrl z = do
+  q <- runPersist $ selectFirst [ShortURLLongurl ==. z, ShortURLCustomShorturl ==. False] []
+  return $ shortURLShorturl . entityVal <$> q
 
-pickRandomShortUrl :: Connection -> IO ByteString
-pickRandomShortUrl d = r False ""
+pickRandomShortUrl :: AppHandler Text
+pickRandomShortUrl = r False ""
   where
-    r :: Bool -> String -> IO ByteString
-    r True x = return (C8.pack x)
+    r :: Bool -> Text -> AppHandler Text
+    r True x = return x
     r False _ = do
-      z <- randomShortUrl
+      z <- liftIO $ randomShortUrl
       -- TODO: Handle []? (db error?)
-      [Only c] <- query d "select count(*) from shorturls where shorturl=?" (Only z) :: IO [Only Int]
-      r (c == 0) z
+      c <- runPersist $ count $ [ShortURLShorturl ==. T.pack z]
+      --[Only c] <- query d "select count(*) from shorturls where shorturl=?" (Only z) :: IO [Only Int]
+      r (c == 0) (T.pack z)
 
     randomShortUrl :: IO String
     randomShortUrl =
@@ -89,16 +87,17 @@ pickRandomShortUrl d = r False ""
       where
         pick xs = liftM (xs !!) (randomRIO (0, length xs - 1))
 
-decideShortUrl :: Connection -> ByteString -> Maybe ByteString -> IO (Either ByteString ByteString)
-decideShortUrl d _ (Just shorturl) = do
+
+decideShortUrl :: Text -> Maybe Text -> AppHandler (Either Text Text)
+decideShortUrl _ (Just shorturl) = do
   case isValidShortUrl shorturl of
     Left e  -> return $ Left e
-    Right u -> isFreeShortUrl d u
-decideShortUrl d long Nothing = do
-  prev <- takePreviousPublicUrl d long
+    Right u -> isFreeShortUrl u
+decideShortUrl long Nothing = do
+  prev <- takePreviousPublicUrl long
   case prev of
     Nothing -> do
-      shorturl <- pickRandomShortUrl d
+      shorturl <- pickRandomShortUrl
       return $ Right shorturl
     Just s  -> return $ Right s
 

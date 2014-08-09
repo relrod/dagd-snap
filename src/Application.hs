@@ -28,5 +28,3 @@ instance HasPersistPool (Handler b App) where
 
 ------------------------------------------------------------------------------
 type AppHandler = Handler App App
-
-
