@@ -15,28 +15,25 @@ import           Data.Char (chr)
 import           Data.List (dropWhileEnd, intercalate, nub)
 import           Data.Maybe
 import           Data.Monoid
-import           Data.Pool
 import qualified Data.Text as T
-import qualified Database.Persist as P
+import qualified Data.Text.Encoding as TE
 import           Database.Persist.Sql
 import           Graphics.ImageMagick.MagickWand
 import qualified Network.HTTP.Conduit as NHC
-import           Network.URI (isAbsoluteURI, isIPv4address, isIPv6address)
+import           Network.URI (isIPv4address, isIPv6address)
 import qualified Network.Socket as S
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
+import           Snap.Snaplet.Persistent
 import           Snap.Util.FileServe
 import qualified System.Random as Rand
 import qualified Text.Regex.PCRE.Light as PCRE
-import           Heist
-import qualified Heist.Interpreted as I
 import           Control.Monad.IO.Class
 import           Network.Whois
 ------------------------------------------------------------------------------
 import           Application
-import qualified ShortURL
-import           ShortURL (ShortURL ())
+import           ShortURL
 
 ------------------------------------------------------------------------------
 -- | Decide if we should add a newline or not to the response.
@@ -239,16 +236,16 @@ whoisHandler = do
 shortUrlRedirectHandler :: AppHandler ()
 shortUrlRedirectHandler = do
   shorturl <- getParam "shorturl"
-  case shorturl of
+  case TE.decodeUtf8 <$> shorturl of
     Nothing ->
       modifyResponse $ setResponseStatus 404 "Not Found"
     Just s  -> do
-      result <- PG.query "select * from shorturls where shorturl=?" (PG.Only s)
-      case result :: [ShortURL] of
-        []    -> modifyResponse $ setResponseStatus 404 "Not Found"
-        [url] -> do
+      result <- runPersist $ selectFirst [ShortURLShorturl ==. s] []
+      case result of
+        Nothing  -> modifyResponse $ setResponseStatus 404 "Not Found"
+        Just url -> do
           r <- getRequest
-          let longUrl = C8.pack $ T.unpack (ShortURL.longurl url)
+          let longUrl = C8.pack $ T.unpack (shortURLLongurl . entityVal $ url)
               extra   = C8.drop (C8.length (rqContextPath r) - 1) (rqURI r)
             in redirect (longUrl `mappend` extra)
 
@@ -256,24 +253,19 @@ shortUrlAddHandler :: AppHandler ()
 shortUrlAddHandler = do
   url      <- getParam "url"
   shorturl <- getParam "shorturl"
-  dbState  <- PG.getPostgresState
-  let (dbPool) = PG.pgPool dbState
-  (db', a) <- liftIO $ takeResource dbPool
-  case url of
+  case TE.decodeUtf8 <$> url of
     Just s -> do
-      newShorturl <- liftIO $ ShortURL.decideShortUrl db' s shorturl
+      newShorturl <- decideShortUrl s (TE.decodeUtf8 <$> shorturl)
       case newShorturl of
         Left e  -> do
           modifyResponse $ setResponseStatus 400 "Bad Request"
-          writeBS e
+          writeText e
         Right s -> do
           -- TODO: Actually store the short url
-          writeBS s
+          writeText s
     Nothing -> do
       modifyResponse $ setResponseStatus 400 "Bad Request"
       writeBS "No Long URL given."
-  liftIO $ destroyResource dbPool a db'
-
 
 ------------------------------------------------------------------------------
 -- | The application's routes.
@@ -298,7 +290,7 @@ routes = [ ("",                       serveDirectory "static")
 app :: SnapletInit App App
 app = makeSnaplet "app" "An snaplet example application." Nothing $ do
     h <- nestSnaplet "" heist $ heistInit "templates"
-    d <- nestSnaplet "db" db PG.pgsInit
+    d <- nestSnaplet "db" db $ initPersist (runMigrationUnsafe migrateAll)
     addRoutes routes
     return $ App h d
 

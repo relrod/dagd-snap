@@ -7,11 +7,7 @@
 {-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TypeFamilies      #-}
 
-module ShortURL
-  ( ShortURL
-  , decideShortUrl
-  , isFreeShortUrl
-  ) where
+module ShortURL where
 
 import           Application
 import           Control.Applicative
