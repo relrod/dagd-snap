@@ -25,7 +25,7 @@ import           Snap.Snaplet.Persistent
 import           System.Random
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
-ShortURL
+Shorturls
   shorturl Text
   longurl Text
   ownerIp Text
@@ -53,7 +53,7 @@ isValidLongURL x = if liftM2 (&&) (Data.List.isPrefixOf "http") isAbsoluteURI (T
 
 isFreeShortUrl :: Text -> AppHandler (Either Text Text)
 isFreeShortUrl z = do
-  c <- runPersist $ count $ [ShortURLShorturl ==. z]
+  c <- runPersist $ count $ [ShorturlsShorturl ==. z]
   return $ if c == 0
            then Right z
            else Left "That short URL was already taken. :'("
@@ -62,8 +62,8 @@ isFreeShortUrl z = do
 
 takePreviousPublicUrl :: Text -> AppHandler (Maybe Text)
 takePreviousPublicUrl z = do
-  q <- runPersist $ selectFirst [ShortURLLongurl ==. z, ShortURLCustomShorturl ==. False] []
-  return $ shortURLShorturl . entityVal <$> q
+  q <- runPersist $ selectFirst [ShorturlsLongurl ==. z, ShorturlsCustomShorturl ==. False] []
+  return $ shorturlsShorturl . entityVal <$> q
 
 pickRandomShortUrl :: AppHandler Text
 pickRandomShortUrl = r False ""
@@ -73,7 +73,7 @@ pickRandomShortUrl = r False ""
     r False _ = do
       z <- liftIO $ randomShortUrl
       -- TODO: Handle []? (db error?)
-      c <- runPersist $ count $ [ShortURLShorturl ==. T.pack z]
+      c <- runPersist $ count $ [ShorturlsShorturl ==. T.pack z]
       --[Only c] <- query d "select count(*) from shorturls where shorturl=?" (Only z) :: IO [Only Int]
       r (c == 0) (T.pack z)
 

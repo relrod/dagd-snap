@@ -240,12 +240,12 @@ shortUrlRedirectHandler = do
     Nothing ->
       modifyResponse $ setResponseStatus 404 "Not Found"
     Just s  -> do
-      result <- runPersist $ selectFirst [ShortURLShorturl ==. s] []
+      result <- runPersist $ selectFirst [ShorturlsShorturl ==. s] []
       case result of
         Nothing  -> modifyResponse $ setResponseStatus 404 "Not Found"
         Just url -> do
           r <- getRequest
-          let longUrl = C8.pack $ T.unpack (shortURLLongurl . entityVal $ url)
+          let longUrl = C8.pack $ T.unpack (shorturlsLongurl . entityVal $ url)
               extra   = C8.drop (C8.length (rqContextPath r) - 1) (rqURI r)
             in redirect (longUrl <> extra)
 
