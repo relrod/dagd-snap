@@ -10,7 +10,7 @@ It is licensed under the same Apache-2.0 license as the original site.
 Development install should be roughly this:
 
 ```
-git clone git://github.com/CodeBlock/dagd-snap
+git clone git://github.com/relrod/dagd-snap
 cd dagd-snap
 cabal sandbox init
 cabal install -fdevelopment
