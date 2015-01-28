@@ -290,7 +290,7 @@ routes = [ ("",                       serveDirectory "static")
 app :: SnapletInit App App
 app = makeSnaplet "app" "An snaplet example application." Nothing $ do
     h <- nestSnaplet "" heist $ heistInit "templates"
-    d <- nestSnaplet "db" db $ initPersist (runMigrationUnsafe migrateAll)
+    d <- nestSnaplet "db" db $ initPersist (runMigration migrateAll)
     addRoutes routes
     return $ App h d
 
